@@ -28,10 +28,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-
-import static com.squareup.javapoet.Util.characterLiteralWithoutSingleQuotes;
-import static com.squareup.javapoet.Util.checkNotNull;
-
 import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.ExecutableElement;
@@ -39,6 +35,9 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.SimpleAnnotationValueVisitor7;
+
+import static com.squareup.javapoet.Util.characterLiteralWithoutSingleQuotes;
+import static com.squareup.javapoet.Util.checkNotNull;
 
 /** A generated annotation on a declaration. */
 public final class AnnotationSpec {

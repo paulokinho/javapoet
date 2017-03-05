@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.util.AbstractSet;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
@@ -29,11 +30,11 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.Callable;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeMirror;
-import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -41,6 +42,7 @@ import org.junit.runners.JUnit4;
 import org.mockito.Mockito;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
@@ -80,7 +82,7 @@ public final class TypeSpecTest {
         + "    return \"taco\";\n"
         + "  }\n"
         + "}\n");
-    Assert.assertEquals(472949424, taco.hashCode()); // update expected number if source changes
+    assertEquals(472949424, taco.hashCode()); // update expected number if source changes
   }
 
   @Test public void interestingTypes() throws Exception {
@@ -200,8 +202,8 @@ public final class TypeSpecTest {
         + "import java.lang.String;\n"
         + "\n"
         + "class Foo {\n"
-        + "  public Foo(long id, @Ping String one, @Ping String two, @Pong(\"pong\") String three, "
-        + "@Ping String four) {\n"
+        + "  public Foo(long id, @Ping String one, @Ping String two, @Pong(\"pong\") String three,\n"
+        + "      @Ping String four) {\n"
         + "    /* code snippets */\n"
         + "  }\n"
         + "}\n");
@@ -281,8 +283,9 @@ public final class TypeSpecTest {
         + "      \"User-Agent: foobar\"\n"
         + "  })\n"
         + "  @POST(\"/foo/bar\")\n"
-        + "  Observable<FooBar> fooBar(@Body Things<Thing> things, @QueryMap(encodeValues = false) "
-        + "Map<String, String> query, @Header(\"Authorization\") String authorization);\n"
+        + "  Observable<FooBar> fooBar(@Body Things<Thing> things,\n"
+        + "      @QueryMap(encodeValues = false) Map<String, String> query,\n"
+        + "      @Header(\"Authorization\") String authorization);\n"
         + "}\n");
   }
 
@@ -627,18 +630,41 @@ public final class TypeSpecTest {
     ClassName tacoBellTaco = ClassName.get("com.taco.bell", "Taco");
     ClassName fishTaco = ClassName.get("org.fish.taco", "Taco");
     TypeSpec typeSpec = TypeSpec.classBuilder("Taco")
-            .superclass(fishTaco)
-            .addSuperinterface(ParameterizedTypeName.get(ClassName.get(Comparable.class), javapoetTaco))
-            .addSuperinterface(tacoBellTaco)
-            .build();
+        .superclass(fishTaco)
+        .addSuperinterface(ParameterizedTypeName.get(ClassName.get(Comparable.class), javapoetTaco))
+        .addSuperinterface(tacoBellTaco)
+        .build();
     assertThat(toString(typeSpec)).isEqualTo(""
-            + "package com.squareup.tacos;\n"
-            + "\n"
-            + "import java.lang.Comparable;\n"
-            + "\n"
-            + "class Taco extends org.fish.taco.Taco "
-            + "implements Comparable<Taco>, com.taco.bell.Taco {\n"
-            + "}\n");
+        + "package com.squareup.tacos;\n"
+        + "\n"
+        + "import java.lang.Comparable;\n"
+        + "\n"
+        + "class Taco extends org.fish.taco.Taco "
+        + "implements Comparable<Taco>, com.taco.bell.Taco {\n"
+        + "}\n");
+  }
+
+  @Test public void classImplementsNestedClass() throws Exception {
+    ClassName outer = ClassName.get(tacosPackage, "Outer");
+    ClassName inner = outer.nestedClass("Inner");
+    ClassName callable = ClassName.get(Callable.class);
+    TypeSpec typeSpec = TypeSpec.classBuilder("Outer")
+        .superclass(ParameterizedTypeName.get(callable,
+            inner))
+        .addType(TypeSpec.classBuilder("Inner")
+            .addModifiers(Modifier.STATIC)
+            .build())
+        .build();
+
+    assertThat(toString(typeSpec)).isEqualTo(""
+        + "package com.squareup.tacos;\n"
+        + "\n"
+        + "import java.util.concurrent.Callable;\n"
+        + "\n"
+        + "class Outer extends Callable<Outer.Inner> {\n"
+        + "  static class Inner {\n"
+        + "  }\n"
+        + "}\n");
   }
 
   @Test public void enumImplements() throws Exception {
@@ -791,13 +817,13 @@ public final class TypeSpecTest {
 
   @Test public void annotationWithFields() {
     FieldSpec field = FieldSpec.builder(int.class, "FOO")
-            .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
-            .initializer("$L", 101)
-            .build();
+        .addModifiers(Modifier.PUBLIC, Modifier.STATIC, Modifier.FINAL)
+        .initializer("$L", 101)
+        .build();
 
     TypeSpec anno = TypeSpec.annotationBuilder("Anno")
-            .addField(field)
-            .build();
+        .addField(field)
+        .build();
 
     assertThat(toString(anno)).isEqualTo(""
         + "package com.squareup.tacos;\n"
@@ -1013,7 +1039,8 @@ public final class TypeSpecTest {
   @Test public void javadoc() {
     TypeSpec taco = TypeSpec.classBuilder("Taco")
         .addJavadoc("A hard or soft tortilla, loosely folded and filled with whatever {@link \n")
-        .addJavadoc("{@link $T random} tex-mex stuff we could find in the pantry.\n", Random.class)
+        .addJavadoc("{@link $T random} tex-mex stuff we could find in the pantry\n", Random.class)
+        .addJavadoc(CodeBlock.of("and some {@link $T} cheese.\n", String.class))
         .addField(FieldSpec.builder(boolean.class, "soft")
             .addJavadoc("True for a soft flour tortilla; false for a crunchy corn tortilla.\n")
             .build())
@@ -1033,7 +1060,8 @@ public final class TypeSpecTest {
         + "\n"
         + "/**\n"
         + " * A hard or soft tortilla, loosely folded and filled with whatever {@link \n"
-        + " * {@link java.util.Random random} tex-mex stuff we could find in the pantry.\n"
+        + " * {@link java.util.Random random} tex-mex stuff we could find in the pantry\n"
+        + " * and some {@link java.lang.String} cheese.\n"
         + " */\n"
         + "class Taco {\n"
         + "  /**\n"
@@ -1768,6 +1796,30 @@ public final class TypeSpecTest {
     }
   }
 
+  @Test public void nullSingleSuperinterfaceAddition() {
+    try {
+      TypeSpec.classBuilder("Taco").addSuperinterface((TypeName) null);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected.getMessage())
+          .isEqualTo("superinterface == null");
+    }
+  }
+
+  @Test public void nullInSuperinterfaceIterableAddition() {
+    List<TypeName> superinterfaces = new ArrayList<>();
+    superinterfaces.add(TypeName.get(List.class));
+    superinterfaces.add(null);
+
+    try {
+      TypeSpec.classBuilder("Taco").addSuperinterfaces(superinterfaces);
+      fail();
+    } catch (IllegalArgumentException expected) {
+      assertThat(expected.getMessage())
+          .isEqualTo("superinterface == null");
+    }
+  }
+
   @Test public void multipleSuperinterfaceAddition() {
     TypeSpec taco = TypeSpec.classBuilder("Taco")
         .addSuperinterfaces(Arrays.asList(
@@ -2014,6 +2066,24 @@ public final class TypeSpecTest {
     }
   }
 
+  @Test public void superClassOnlyValidForClasses() {
+    try {
+      TypeSpec.annotationBuilder("A").superclass(ClassName.get(Object.class));
+      fail();
+    } catch (IllegalStateException expected) {
+    }
+    try {
+      TypeSpec.enumBuilder("E").superclass(ClassName.get(Object.class));
+      fail();
+    } catch (IllegalStateException expected) {
+    }
+    try {
+      TypeSpec.interfaceBuilder("I").superclass(ClassName.get(Object.class));
+      fail();
+    } catch (IllegalStateException expected) {
+    }
+  }
+
   @Test public void invalidSuperClass() {
     try {
       TypeSpec.classBuilder("foo")
@@ -2180,10 +2250,8 @@ public final class TypeSpecTest {
         + "}\n");
   }
 
-  @Test
-  public void initializerBlockUnsupportedExceptionOnInterface() {
+  @Test public void initializerBlockUnsupportedExceptionOnInterface() {
     TypeSpec.Builder interfaceBuilder = TypeSpec.interfaceBuilder("Taco");
-
     try {
       interfaceBuilder.addInitializerBlock(CodeBlock.builder().build());
       fail("Exception expected");
@@ -2191,16 +2259,42 @@ public final class TypeSpecTest {
     }
   }
 
-  @Test
-  public void initializerBlockUnsupportedExceptionOnAnnotation() {
-
+  @Test public void initializerBlockUnsupportedExceptionOnAnnotation() {
     TypeSpec.Builder annotationBuilder = TypeSpec.annotationBuilder("Taco");
-
     try {
       annotationBuilder.addInitializerBlock(CodeBlock.builder().build());
       fail("Exception expected");
     } catch (UnsupportedOperationException e) {
     }
+  }
+
+  @Test public void lineWrapping() {
+    MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder("call");
+    methodBuilder.addCode("$[call(");
+    for (int i = 0; i < 32; i++) {
+      methodBuilder.addParameter(String.class, "s" + i);
+      methodBuilder.addCode(i > 0 ? ",$W$S" : "$S", i);
+    }
+    methodBuilder.addCode(");$]\n");
+
+    TypeSpec taco = TypeSpec.classBuilder("Taco")
+        .addMethod(methodBuilder.build())
+        .build();
+    assertThat(toString(taco)).isEqualTo(""
+        + "package com.squareup.tacos;\n"
+        + "\n"
+        + "import java.lang.String;\n"
+        + "\n"
+        + "class Taco {\n"
+        + "  void call(String s0, String s1, String s2, String s3, String s4, String s5, String s6, String s7,\n"
+        + "      String s8, String s9, String s10, String s11, String s12, String s13, String s14, String s15,\n"
+        + "      String s16, String s17, String s18, String s19, String s20, String s21, String s22,\n"
+        + "      String s23, String s24, String s25, String s26, String s27, String s28, String s29,\n"
+        + "      String s30, String s31) {\n"
+        + "    call(\"0\", \"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\", \"9\", \"10\", \"11\", \"12\", \"13\", \"14\", \"15\", \"16\",\n"
+        + "        \"17\", \"18\", \"19\", \"20\", \"21\", \"22\", \"23\", \"24\", \"25\", \"26\", \"27\", \"28\", \"29\", \"30\", \"31\");\n"
+        + "  }\n"
+        + "}\n");
   }
 
   @Test public void equalsAndHashCode() {

@@ -23,13 +23,12 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import javax.lang.model.SourceVersion;
-import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeParameterElement;
-import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.ExecutableType;
 import javax.lang.model.type.TypeMirror;
@@ -43,7 +42,6 @@ import static com.squareup.javapoet.Util.checkState;
 /** A generated constructor or method declaration. */
 public final class MethodSpec {
   static final String CONSTRUCTOR = "<init>";
-  static final ClassName OVERRIDE = ClassName.get(Override.class);
 
   public final String name;
   public final CodeBlock javadoc;
@@ -102,7 +100,7 @@ public final class MethodSpec {
     boolean firstParameter = true;
     for (Iterator<ParameterSpec> i = parameters.iterator(); i.hasNext(); ) {
       ParameterSpec parameter = i.next();
-      if (!firstParameter) codeWriter.emit(", ");
+      if (!firstParameter) codeWriter.emit(",").emitWrappingSpace();
       parameter.emit(codeWriter, !i.hasNext() && varargs);
       firstParameter = false;
     }
@@ -115,11 +113,11 @@ public final class MethodSpec {
     }
 
     if (!exceptions.isEmpty()) {
-      codeWriter.emit(" throws");
+      codeWriter.emitWrappingSpace().emit("throws");
       boolean firstException = true;
       for (TypeName exception : exceptions) {
         if (!firstException) codeWriter.emit(",");
-        codeWriter.emit(" $T", exception);
+        codeWriter.emitWrappingSpace().emit("$T", exception);
         firstException = false;
       }
     }
@@ -184,6 +182,9 @@ public final class MethodSpec {
    *
    * <p>This will copy its visibility modifiers, type parameters, return type, name, parameters, and
    * throws declarations. An {@link Override} annotation will be added.
+   *
+   * <p>Note that in JavaPoet 1.2 through 1.7 this method retained annotations from the method and
+   * parameters of the overridden method. Since JavaPoet 1.8 annotations must be added separately.
    */
   public static Builder overriding(ExecutableElement method) {
     checkNotNull(method, "method == null");
@@ -198,12 +199,7 @@ public final class MethodSpec {
     String methodName = method.getSimpleName().toString();
     MethodSpec.Builder methodBuilder = MethodSpec.methodBuilder(methodName);
 
-    methodBuilder.addAnnotation(OVERRIDE);
-    for (AnnotationMirror mirror : method.getAnnotationMirrors()) {
-      AnnotationSpec annotationSpec = AnnotationSpec.get(mirror);
-      if (annotationSpec.type.equals(OVERRIDE)) continue;
-      methodBuilder.addAnnotation(annotationSpec);
-    }
+    methodBuilder.addAnnotation(Override.class);
 
     modifiers = new LinkedHashSet<>(modifiers);
     modifiers.remove(Modifier.ABSTRACT);
@@ -216,19 +212,7 @@ public final class MethodSpec {
     }
 
     methodBuilder.returns(TypeName.get(method.getReturnType()));
-
-    List<? extends VariableElement> parameters = method.getParameters();
-    for (VariableElement parameter : parameters) {
-      TypeName type = TypeName.get(parameter.asType());
-      String name = parameter.getSimpleName().toString();
-      Set<Modifier> parameterModifiers = parameter.getModifiers();
-      ParameterSpec.Builder parameterBuilder = ParameterSpec.builder(type, name)
-          .addModifiers(parameterModifiers.toArray(new Modifier[parameterModifiers.size()]));
-      for (AnnotationMirror mirror : parameter.getAnnotationMirrors()) {
-        parameterBuilder.addAnnotation(AnnotationSpec.get(mirror));
-      }
-      methodBuilder.addParameter(parameterBuilder.build());
-    }
+    methodBuilder.addParameters(ParameterSpec.parametersOf(method));
     methodBuilder.varargs(method.isVarArgs());
 
     for (TypeMirror thrownType : method.getThrownTypes()) {
@@ -246,6 +230,9 @@ public final class MethodSpec {
    *
    * <p>This will copy its visibility modifiers, type parameters, return type, name, parameters, and
    * throws declarations. An {@link Override} annotation will be added.
+   *
+   * <p>Note that in JavaPoet 1.2 through 1.7 this method retained annotations from the method and
+   * parameters of the overridden method. Since JavaPoet 1.8 annotations must be added separately.
    */
   public static Builder overriding(
       ExecutableElement method, DeclaredType enclosing, Types types) {
@@ -302,6 +289,11 @@ public final class MethodSpec {
 
     public Builder addJavadoc(String format, Object... args) {
       javadoc.add(format, args);
+      return this;
+    }
+
+    public Builder addJavadoc(CodeBlock block) {
+      javadoc.add(block);
       return this;
     }
 
@@ -415,8 +407,18 @@ public final class MethodSpec {
       return this;
     }
 
+    public Builder addNamedCode(String format, Map<String, ?> args) {
+      code.addNamed(format, args);
+      return this;
+    }
+
     public Builder addCode(CodeBlock codeBlock) {
       code.add(codeBlock);
+      return this;
+    }
+
+    public Builder addComment(String format, Object... args) {
+      code.add("// " + format + "\n", args);
       return this;
     }
 

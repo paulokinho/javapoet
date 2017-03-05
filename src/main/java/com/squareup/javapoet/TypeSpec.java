@@ -149,7 +149,6 @@ public final class TypeSpec {
     codeWriter.statementLine = -1;
 
     try {
-      codeWriter.pushType(this);
       if (enumName != null) {
         codeWriter.emitJavadoc(javadoc);
         codeWriter.emitAnnotations(annotations, false);
@@ -214,6 +213,7 @@ public final class TypeSpec {
         codeWriter.emit(" {\n");
       }
 
+      codeWriter.pushType(this);
       codeWriter.indent();
       boolean firstMember = true;
       for (Iterator<Map.Entry<String, TypeSpec>> i = enumConstants.entrySet().iterator();
@@ -285,13 +285,13 @@ public final class TypeSpec {
       }
 
       codeWriter.unindent();
+      codeWriter.popType();
 
       codeWriter.emit("}");
       if (enumName == null && anonymousTypeArguments == null) {
         codeWriter.emit("\n"); // If this type isn't also a value, include a trailing newline.
       }
     } finally {
-      codeWriter.popType();
       codeWriter.statementLine = previousStatementLine;
     }
   }
@@ -391,6 +391,11 @@ public final class TypeSpec {
       return this;
     }
 
+    public Builder addJavadoc(CodeBlock block) {
+      javadoc.add(block);
+      return this;
+    }
+
     public Builder addAnnotations(Iterable<AnnotationSpec> annotationSpecs) {
       checkArgument(annotationSpecs != null, "annotationSpecs == null");
       for (AnnotationSpec annotationSpec : annotationSpecs) {
@@ -434,6 +439,7 @@ public final class TypeSpec {
     }
 
     public Builder superclass(TypeName superclass) {
+      checkState(this.kind == Kind.CLASS, "only classes have super classes, not " + this.kind);
       checkState(this.superclass == ClassName.OBJECT,
           "superclass already set to " + this.superclass);
       checkArgument(!superclass.isPrimitive(), "superclass may not be a primitive");
@@ -448,12 +454,13 @@ public final class TypeSpec {
     public Builder addSuperinterfaces(Iterable<? extends TypeName> superinterfaces) {
       checkArgument(superinterfaces != null, "superinterfaces == null");
       for (TypeName superinterface : superinterfaces) {
-        this.superinterfaces.add(superinterface);
+        addSuperinterface(superinterface);
       }
       return this;
     }
 
     public Builder addSuperinterface(TypeName superinterface) {
+      checkArgument(superinterface != null, "superinterface == null");
       this.superinterfaces.add(superinterface);
       return this;
     }
